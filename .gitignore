@@ -1,0 +1,13 @@
+# Infrastructure-Components
+.infrastructure_temp/
+# Environment variables
+*.env
+# Serverless files
+.serverless
+.dynamodb
+# output-folders
+container/
+build/
+dist/
+node_modules/
+v8-compile-cache-0/
