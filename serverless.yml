@@ -4,6 +4,7 @@ service:
 plugins:
   - serverless-offline
   - serverless-pseudo-parameters
+  - serverless-dynamodb-local
   
 # the custom section
 custom:
@@ -11,6 +12,16 @@ custom:
   serverless-offline:
     host: 0.0.0.0
     port: ${self:provider.port, env:PORT, '3000'}
+  dynamodb:
+    stages:
+      - dev
+    start:
+      port: 8000
+      inMemory: true
+      heapInitial: 200m
+      heapMax: 1g
+      migrate: true
+      convertEmptyValues: true
   
 
 package:
@@ -29,6 +40,8 @@ provider:
     STAGE: ${self:provider.stage, env:STAGE, 'dev'}
     STAGE_PATH: ${self:provider.stage_path, env:STAGE_PATH, ''}
     DOMAIN_URL: { "Fn::Join" : ["", [" https://#{ApiGatewayRestApi}", ".execute-api.us-east-1.amazonaws.com/${self:provider.stage, env:STAGE, 'dev'}" ] ]  }
+    TABLE_NAME: ${self:service}-${self:provider.stage, env:STAGE, 'dev'}-data-layer
+    GRAPHQL_PATH: query
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -119,6 +132,30 @@ resources:
       Properties:
         RestApiId: !Ref ApiGatewayRestApi
         StageName: ${self:provider.stage, env:STAGE, 'dev'}
+    ApplicationDynamoDBTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:service}-${self:provider.stage, env:STAGE, 'dev'}-data-layer
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+          - AttributeName: sk
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: reverse
+            KeySchema:
+              - AttributeName: sk
+                KeyType: HASH
+              - AttributeName: pk
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
     IsomorphicAppLambdaRole:
       Type: AWS::IAM::Role
       Properties:
@@ -146,4 +183,15 @@ resources:
                     - s3:Get*
                     - s3:List*
                   Resource: "*"
+                - Effect: Allow
+                  Action:
+                    - dynamodb:GetItem
+                    - dynamodb:UpdateItem
+                    - dynamodb:DeleteItem
+                    - dynamodb:PutItem
+                    - dynamodb:Scan
+                    - dynamodb:Query
+                  Resource:
+                    - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:service}-${self:provider.stage, env:STAGE, 'dev'}-data-layer"
+                    - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:service}-${self:provider.stage, env:STAGE, 'dev'}-data-layer/*"
 
